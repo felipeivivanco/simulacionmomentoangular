@@ -6,8 +6,9 @@ class SimulationControls {
   constructor({ document, engine, mount, onReset, onTogglePause, onOverlayToggle, onPhysicalStateChange, onThetaTargetChange, onParameterChange } = {}) {
     if (!document || typeof document.createElement !== 'function') throw new TypeError('document is required');
     if (!engine || typeof engine.setThetaTarget !== 'function' || typeof engine.setSpinRate !== 'function' ||
-        typeof engine.setWheelDiameter !== 'function' || typeof engine.setWheelMass !== 'function') {
-      throw new TypeError('engine must expose theta, spin, diameter and mass APIs');
+        typeof engine.setWheelDiameter !== 'function' || typeof engine.setWheelMass !== 'function' ||
+        typeof engine.setIncludeHuman !== 'function') {
+      throw new TypeError('engine must expose theta, spin, diameter, mass and human-model APIs');
     }
     if (!mount || typeof mount.appendChild !== 'function') throw new TypeError('mount must provide appendChild()');
     if (onReset !== undefined && typeof onReset !== 'function') throw new TypeError('onReset must be a function');
@@ -69,6 +70,28 @@ class SimulationControls {
     this.inertiaReadout = document.createElement('div');
     this.inertiaReadout.className = 'ui-readout ui-readout--inertia';
     this.readout.appendChild(this.inertiaReadout);
+
+    this.humanModelGroup = document.createElement('div');
+    this.humanModelGroup.className = 'ui-control-group ui-human-model-group';
+    const humanModelRow = document.createElement('div');
+    humanModelRow.className = 'ui-control-row';
+    this.humanModelLabel = this._label('Modelo simplificado del humano');
+    this.humanModelLabel.style.margin = '0';
+    this.humanModelSwitch = document.createElement('input');
+    this.humanModelSwitch.type = 'checkbox';
+    this.humanModelSwitch.className = 'ui-switch';
+    this.humanModelSwitch.id = 'include-human-switch';
+    this.humanModelSwitch.checked = false;
+    this.humanModelSwitch.setAttribute?.('role', 'switch');
+    this.humanModelState = document.createElement('span');
+    this.humanModelState.className = 'ui-direction-state';
+    this._updateHumanModelPresentation();
+    const humanModelControl = document.createElement('div');
+    humanModelControl.className = 'ui-direction';
+    humanModelControl.append(this.humanModelSwitch, this.humanModelState);
+    humanModelRow.append(this.humanModelLabel, humanModelControl);
+    this.humanModelGroup.appendChild(humanModelRow);
+
     // Compatibility aliases: these names are retained for existing callers/tests,
     // but all four references point to the live slider-adjacent value nodes.
     this.targetReadout = this.thetaValue;
@@ -152,6 +175,7 @@ class SimulationControls {
       controlGroup(this.diameterLabel, this.diameterSlider, this.diameterValue),
       controlGroup(this.massLabel, this.massSlider, this.massValue),
       this.readout,
+      this.humanModelGroup,
       this.overlaySection
     );
 
@@ -194,6 +218,12 @@ class SimulationControls {
       const state = this.engine.setWheelMass(value);
       this.update(state);
       this.onParameterChange?.(state, 'mass');
+    };
+    this._onHumanModelChange = () => {
+      if (this.disposed) return;
+      const state = this.engine.setIncludeHuman(!Boolean(this.humanModelSwitch.checked));
+      this.update(state);
+      this.onParameterChange?.(state, 'include-human');
     };
     this._onPauseToggle = () => {
       if (this.disposed) return;
@@ -248,6 +278,7 @@ class SimulationControls {
     this.directionSwitch.addEventListener('change', this._onDirectionChange);
     this.diameterSlider.addEventListener('input', this._onDiameterInput);
     this.massSlider.addEventListener('input', this._onMassInput);
+    this.humanModelSwitch.addEventListener('change', this._onHumanModelChange);
     this.pauseButton.addEventListener('click', this._onPauseToggle);
     this.resetButton.addEventListener('click', this._onReset);
 
@@ -323,6 +354,23 @@ class SimulationControls {
     this.directionSwitch.setAttribute?.('aria-checked', String(negative));
   }
 
+  _updateHumanModelPresentation() {
+    if (!this.humanModelSwitch || !this.humanModelState) return;
+    const simplified = Boolean(this.humanModelSwitch.checked);
+    this.humanModelState.textContent = simplified ? 'ON' : 'OFF';
+    this.humanModelSwitch.setAttribute?.('aria-label', simplified ? 'Modelo simplificado del humano: activado' : 'Modelo simplificado del humano: desactivado');
+    this.humanModelSwitch.setAttribute?.('aria-checked', String(simplified));
+  }
+
+  setIncludeHuman(includeHuman, physicsState = null) {
+    if (this.disposed) throw new Error('SimulationControls is disposed');
+    this.humanModelSwitch.checked = !Boolean(includeHuman);
+    this._updateHumanModelPresentation();
+    const state = physicsState ?? this.engine?.getState?.();
+    if (state) this.update(state);
+    return state;
+  }
+
   update(physicsState) {
     if (this.disposed) throw new Error('SimulationControls is disposed');
     if (!physicsState || !Number.isFinite(physicsState.theta) || !Number.isFinite(physicsState.theta_target)) throw new TypeError('physicsState must contain finite theta and theta_target');
@@ -340,6 +388,8 @@ class SimulationControls {
     this._updateDirectionPresentation();
     this.diameterSlider.value = String(physicsState.params.D);
     this.massSlider.value = String(physicsState.params.m_w);
+    this.humanModelSwitch.checked = physicsState.params.includeHuman === false;
+    this._updateHumanModelPresentation();
     // A live browser render can arrive on the very next animation frame after
     // dblclick. While a numeric editor is open, preserve that value node so the
     // input remains attached and editable. The engine snapshot is the only
@@ -364,6 +414,7 @@ class SimulationControls {
     if (this.disposed) throw new Error('SimulationControls is disposed');
     if (!['stopped', 'running', 'paused'].includes(status)) throw new RangeError('status must be stopped, running or paused');
     this.lifecycleStatus = status;
+    this.engine.setLifecycleStatus?.(status);
     this.paused = status === 'paused';
     const presentation = {
       stopped: { text: '▶ Iniciar simulación', aria: 'Iniciar simulación', color: '#2e7d32' },
@@ -389,7 +440,8 @@ class SimulationControls {
       directionSign: this._directionSign,
       Ia: this._lastState?.params?.Ia,
       D: this._lastState?.params?.D ?? Number(this.diameterSlider.value),
-      mass: this._lastState?.params?.m_w ?? Number(this.massSlider.value)
+      mass: this._lastState?.params?.m_w ?? Number(this.massSlider.value),
+      includeHuman: this._lastState?.params?.includeHuman !== false
     };
   }
 
@@ -510,6 +562,7 @@ class SimulationControls {
     this.directionSwitch.removeEventListener('change', this._onDirectionChange);
     this.diameterSlider.removeEventListener('input', this._onDiameterInput);
     this.massSlider.removeEventListener('input', this._onMassInput);
+    this.humanModelSwitch.removeEventListener('change', this._onHumanModelChange);
     for (const input of Object.values(this.overlayChecks)) input.removeEventListener?.('change', input._overlayHandler);
     this.pauseButton.removeEventListener('click', this._onPauseToggle);
     this.resetButton.removeEventListener('click', this._onReset);

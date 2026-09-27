@@ -373,3 +373,22 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(47,134,234,.
   .ui-main { padding:6px; }
   .scene-runtime { grid-template-rows:minmax(260px,43vh) auto auto; }
 }
+
+
+/* C2.1 polish: center all three bottom-dock labels vertically in the dock. */
+.ui-bottom-dock .ui-bottom-toggle {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:52px;
+  line-height:1.2;
+  margin:0;
+}
+
+/* Keep the derived wheel-inertia readout visually consistent with the main
+   control labels; it is intentionally more prominent than the old small readout. */
+.ui-readout--inertia {
+  font-size:16px !important;
+  font-weight:800 !important;
+  line-height:1.35;
+}

@@ -37,7 +37,7 @@ test('3N.2-V1 — magnitudes mostradas cumplen |L| = sqrt(Lx²+Ly²+Lz²) con el
     assert.ok(Math.abs(expected-components)<1e-14);
     for (const value of vector) assert.match(text, new RegExp(`${value.toFixed(4).replace('.', '\\.')}`));
   }
-  assert.deepEqual(shown.LWheel,state.L_wheel_body); assert.deepEqual(shown.LBody,state.L_body_body);
+  assert.deepEqual(shown.LWheel,state.L_wheel_world); assert.deepEqual(shown.LBody,state.L_body_world);
 });
 
 test('3N.2-V2 — el overlay usa exactamente los mismos vectores físicos que la ficha',()=>{

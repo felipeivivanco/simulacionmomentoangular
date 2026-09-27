@@ -17,7 +17,8 @@ class EngineAdapter {
       mode: normalizeMode(mode),
       params: createParams(params),
       theta0,
-      Omega0: [...Omega0]
+      Omega0: [...Omega0],
+      includeHuman: params.includeHuman !== false
     };
     validateParams(this._config.params);
     this._engine = new AngularMomentumEngine(this._config);
@@ -62,11 +63,17 @@ class EngineAdapter {
 
   setInitialSpin(s0) {
     if (!(Number.isFinite(s0))) throw new TypeError('s0 must be finite');
-    const nextParams = createParams({ ...this._config.params, s0 });
+    const nextParams = createParams({ ...this._config.params, s0, includeHuman: this._config.includeHuman });
     validateParams(nextParams);
     this._config.params = nextParams;
+    this._config.includeHuman = nextParams.includeHuman !== false;
     this._engine = new AngularMomentumEngine(this._config);
     return this.getState();
+  }
+
+  setLifecycleStatus(status) {
+    if (!['stopped','running','paused'].includes(status)) throw new RangeError('status must be stopped, running or paused');
+    return this._engine.setLifecycleStatus(status);
   }
 
   setSpinRate(spinRate) {
@@ -86,14 +93,22 @@ class EngineAdapter {
   setWheelMass(m_w) {
     if (!(Number.isFinite(m_w) && m_w > 0)) throw new TypeError('m_w must be > 0');
     const state = this._engine.setWheelMass(m_w);
-    this._config.params = createParams({ ...this._config.params, m_w: state.params.m_w, Ia: state.params.Ia, D: state.params.D, s0: state.params.s0 });
+    this._config.params = createParams({ ...this._config.params, m_w: state.params.m_w, Ia: state.params.Ia, D: state.params.D, s0: state.params.s0, includeHuman: state.params.includeHuman });
     return state;
   }
 
   setWheelDiameter(D) {
     if (!(Number.isFinite(D) && D > 0)) throw new TypeError('D must be > 0');
     const state = this._engine.setWheelDiameter(D);
-    this._config.params = createParams({ ...this._config.params, D: state.params.D, Ia: state.params.Ia, s0: state.params.s0 });
+    this._config.params = createParams({ ...this._config.params, D: state.params.D, Ia: state.params.Ia, s0: state.params.s0, includeHuman: state.params.includeHuman });
+    return state;
+  }
+
+  setIncludeHuman(includeHuman) {
+    if (typeof includeHuman !== 'boolean') throw new TypeError('includeHuman must be boolean');
+    const state = this._engine.setIncludeHuman(includeHuman);
+    this._config.includeHuman = includeHuman;
+    this._config.params = createParams({ ...this._config.params, includeHuman });
     return state;
   }
 
@@ -113,6 +128,7 @@ class EngineAdapter {
     const nextParams = createParams(params);
     validateParams(nextParams);
     this._config.params = nextParams;
+    this._config.includeHuman = nextParams.includeHuman !== false;
     this._engine = new AngularMomentumEngine(this._config);
     return this.getState();
   }

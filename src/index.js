@@ -98,12 +98,19 @@ function createParams(overrides={}){
 }
 
 function frame(th){return {n:[Math.cos(th),0,Math.sin(th)],t:[-Math.sin(th),0,Math.cos(th)],h:[0,-1,0]};}
-function Istar(P,mode){
-  const d=P.r_w, dd=dot(d,d), I=matAdd([[P.Ip[0],0,0],[0,P.Ip[1],0],[0,0,P.Ip[2]]],matScale(matAdd(matScale(eye(),dd),matScale(outer(d,d),-1)),P.mu));
+function Istar(P,mode,includeHuman=true){
+  const human = includeHuman !== false;
+  const d=P.r_w, dd=dot(d,d);
+  // OFF keeps the human as an idealized dynamical body: its geometric mass
+  // distribution is removed, but its symmetric principal inertias remain so
+  // the human can still rotate and carry angular momentum in the phenomenon.
+  const I = human
+    ? matAdd([[P.Ip[0],0,0],[0,P.Ip[1],0],[0,0,P.Ip[2]]],matScale(matAdd(matScale(eye(),dd),matScale(outer(d,d),-1)),P.mu))
+    : [[P.Ip[0],0,0],[0,P.Ip[1],0],[0,0,P.Ip[2]]];
   if(mode==='VerticalBearing'||mode==='VB') return matAdd(I,matScale(outer(EZ,EZ),P.I_pl_z));
   return I;
 }
-function Ic(P,mode,th){const {n}=frame(th);return matAdd(Istar(P,mode),matScale(matAdd(eye(),matScale(outer(n,n),-1)),P.It));}
+function Ic(P,mode,th,includeHuman=true){const {n}=frame(th);return matAdd(Istar(P,mode,includeHuman),matScale(matAdd(eye(),matScale(outer(n,n),-1)),P.It));}
 function dIc(P,th,thd){const {n,t}=frame(th);return matScale(matAdd(outer(t,n),outer(n,t)),-P.It*thd);}
 function modeName(mode){return mode==='VB'||mode==='VerticalBearing'?'VerticalBearing':'Free';}
 
@@ -129,22 +136,23 @@ class Plan{
   breakpoints(ta,tb){return this.knots.slice(1,-1).filter(k=>ta<k&&k<tb);}
 }
 
-function makeContext(params=createParams(),mode='Free'){
-  const P=params; const M=modeName(mode);
-  return {P,mode:M,Istar:Istar(P,M),Iplz:P.I_pl_z};
+function makeContext(params=createParams(),mode='Free',includeHuman=params.includeHuman !== false){
+  const P=params; const M=modeName(mode); const H=includeHuman !== false;
+  return {P,mode:M,includeHuman:H,Istar:Istar(P,M,H),Iplz:P.I_pl_z};
 }
-function initL0(ctx,q0,th0,Om0=[0,0,0]){
-  const P=ctx.P,{n}=frame(th0),I=Ic(P,ctx.mode,th0),Lb=add(matVec(I,Om0),scale(n,P.ps)),Rw=qR(q0),Lw=matVec(Rw,Lb);
+function initL0(ctx,q0,th0,Om0=[0,0,0],thd0=0){
+  const P=ctx.P,{n,h}=frame(th0),I=Ic(P,ctx.mode,th0,ctx.includeHuman);
+  const Lb=add(add(matVec(I,Om0),scale(n,P.ps)),scale(h,P.It*thd0)),Rw=qR(q0),Lw=matVec(Rw,Lb);
   return ctx.mode==='Free'?Lw:Lw[2];
 }
 function omega(ctx,q,th,thd,L0){
-  const P=ctx.P,{n,h}=frame(th),I=Ic(P,ctx.mode,th);
+  const P=ctx.P,{n,h}=frame(th),I=Ic(P,ctx.mode,th,ctx.includeHuman);
   if(ctx.mode==='Free') return solve3(I,sub(sub(matVec(transpose(qR(q)),L0),scale(n,P.ps)),scale(h,P.It*thd)));
   const rz=L0-P.ps*n[2]-P.It*thd*h[2]; return [0,0,rz/I[2][2]];
 }
 
 function evaluate(ctx,q,th,thd,thdd,L0){
-  const P=ctx.P,{n,t,h}=frame(th),I=Ic(P,ctx.mode,th),Om=omega(ctx,q,th,thd,L0),R=qR(q),Pn=matAdd(eye(),matScale(outer(n,n),-1));
+  const P=ctx.P,{n,t,h}=frame(th),I=Ic(P,ctx.mode,th,ctx.includeHuman),Om=omega(ctx,q,th,thd,L0),R=qR(q),Pn=matAdd(eye(),matScale(outer(n,n),-1));
   const Lw=add(add(scale(n,P.ps),scale(matVec(Pn,Om),P.It)),scale(h,P.It*thd));
   const Lb=matVec(ctx.Istar,Om), Lt=add(Lw,Lb), Ltw=matVec(R,Lt);
   const T=0.5*dot(Om,matVec(I,Om))+P.It*thd*dot(h,Om)+0.5*P.It*thd*thd+P.ps*P.ps/(2*P.Ia);
@@ -203,9 +211,10 @@ function run({mode='Free',params=createParams(),target=Math.PI/2,theta0=Math.PI/
 
 class AngularMomentumEngine {
   constructor({mode='Free',params=createParams(),theta0=Math.PI/2,Omega0=[0,0,0]}={}){
-    this.ctx=makeContext(params,mode); this.P=this.ctx.P; this.mode=this.ctx.mode; this.reset(theta0,Omega0);
+    this.includeHuman = params.includeHuman !== false; this.ctx=makeContext(params,mode,this.includeHuman); this.P=this.ctx.P; this.P.includeHuman=this.includeHuman; this.mode=this.ctx.mode; this.lifecycleStatus='stopped'; this.reset(theta0,Omega0);
   }
   reset(theta0=Math.PI/2,Omega0=[0,0,0]){
+    this.lifecycleStatus='stopped';
     this.P.ps=this.P.Ia*this.P.s0;
     this.P.It=this.P.kt*this.P.Ia;
     this.P.R=this.P.D/2;
@@ -214,6 +223,12 @@ class AngularMomentumEngine {
   setTarget(thetaTarget){
     const target=Math.max(-Math.PI/2,Math.min(Math.PI/2,thetaTarget));
     if(Math.abs(target-this.target)>0){const [th,w]=this.plan.eval(this.st.t+1e-12);this.plan=new Plan(this.st.t,th,w,target,this.P);this.target=target;}
+  }
+
+  setLifecycleStatus(status){
+    if(!['stopped','running','paused'].includes(status)) throw new RangeError('status must be stopped, running or paused');
+    this.lifecycleStatus=status;
+    return status;
   }
 
   setSpinRate(spinRate){
@@ -279,18 +294,24 @@ class AngularMomentumEngine {
     const oldMass=this.P.m_w;
     const targetIa=wheelRingInertia(m_w,this.P.D);
     if(Math.abs(m_w-oldMass)<=1e-15 && Math.abs(this.P.Ia-targetIa)<=1e-15) return before;
-    // Parameter changes use the documented homogeneous-disk wheel model.
-    // Preserve p_s (the validated spin angular momentum state) while the
-    // physical inertia changes, so the resulting absolute spin rate changes
-    // consistently with the existing 3M/3N parameter-change semantics.
-    const ps=this.P.ps;
+    // When the simulation is stopped/paused, parameter edits define the new
+    // initial/control environment, so the configured spin stays fixed and
+    // p_s = I_a * s0 changes with inertia. While running, preserve the wheel's
+    // physical spin angular momentum p_s and adjust s0 accordingly.
+    const preservedPs=this.P.ps;
     this.P.m_w=m_w;
     this.P.mu=this.P.m_p*this.P.m_w/(this.P.m_p+this.P.m_w);
     this.P.Ia=wheelRingInertia(this.P.m_w,this.P.D);
     this.P.It=this.P.kt*this.P.Ia;
-    this.P.ps=ps;
-    const after=this.snapshot();
-    this.st.W_parameter += after.T-before.T;
+    if(this.lifecycleStatus==='running'){
+      this.P.ps=preservedPs;
+      this.P.s0=this.P.Ia>0 ? preservedPs/this.P.Ia : 0;
+    } else {
+      this.P.ps=this.P.Ia*this.P.s0;
+    }
+    const [thNow, thdNow, thddNow] = this.plan.eval(this.st.t + 1e-12);
+    const afterEnergy = evaluate(this.ctx, this.st.q, thNow, thdNow, thddNow, this.st.L0).T;
+    this.st.W_parameter += afterEnergy-before.T;
     this.st.lastControl={type:'parameter-change',parameter:'m_w',m_w:this.P.m_w,Ia:this.P.Ia,external:true};
     return this.snapshot();
   }
@@ -300,20 +321,46 @@ class AngularMomentumEngine {
     const before=this.snapshot();
     const targetIa=wheelRingInertia(this.P.m_w,D);
     if(Math.abs(D-this.P.D)<=1e-15 && Math.abs(this.P.Ia-targetIa)<=1e-15) return before;
-    const ps=this.P.ps;
+    const preservedPs=this.P.ps;
     this.P.D=D;
     this.P.R=D/2;
     this.P.Ia=wheelRingInertia(this.P.m_w,this.P.D);
     this.P.It=this.P.kt*this.P.Ia;
-    this.P.ps=ps;
-    const after=this.snapshot();
-    this.st.W_parameter += after.T-before.T;
+    if(this.lifecycleStatus==='running'){
+      this.P.ps=preservedPs;
+      this.P.s0=this.P.Ia>0 ? preservedPs/this.P.Ia : 0;
+    } else {
+      this.P.ps=this.P.Ia*this.P.s0;
+    }
+    const [thNow, thdNow, thddNow] = this.plan.eval(this.st.t + 1e-12);
+    const afterEnergy = evaluate(this.ctx, this.st.q, thNow, thdNow, thddNow, this.st.L0).T;
+    this.st.W_parameter += afterEnergy-before.T;
     this.st.lastControl={type:'parameter-change',parameter:'D',D:this.P.D,Ia:this.P.Ia,external:true};
     return this.snapshot();
   }
 
+  setIncludeHuman(includeHuman){
+    const next = Boolean(includeHuman);
+    if (next === this.includeHuman) return this.snapshot();
+    const before = this.snapshot();
+    const [th, thd] = this.plan.eval(this.st.t + 1e-12);
+    const oldOmega = [...before.Omega_b];
+    this.includeHuman = next;
+    this.P.includeHuman = next;
+    this.ctx = makeContext(this.P, this.mode, next);
+    // Keep the instantaneous kinematics (q, theta and Omega_b) while changing
+    // only the physical idealization. Rebuild the conserved quantity from that
+    // same instantaneous state so subsequent evolution uses the new model.
+    this.st.L0 = initL0(this.ctx, this.st.q, th, oldOmega, thd);
+    const [thNow, thdNow, thddNow] = this.plan.eval(this.st.t + 1e-12);
+    const afterEnergy = evaluate(this.ctx, this.st.q, thNow, thdNow, thddNow, this.st.L0).T;
+    this.st.W_parameter += afterEnergy - before.T;
+    this.st.lastControl = { type:'parameter-change', parameter:'includeHuman', includeHuman:next, external:true };
+    return this.snapshot();
+  }
+
   getParameters(){
-    return {D:this.P.D,R:this.P.R,Ia:this.P.Ia,m_w:this.P.m_w,s0:this.P.s0,kt:this.P.kt,ps:this.P.ps,It:this.P.It};
+    return {D:this.P.D,R:this.P.R,Ia:this.P.Ia,m_w:this.P.m_w,s0:this.P.s0,kt:this.P.kt,ps:this.P.ps,It:this.P.It,includeHuman:this.includeHuman};
   }
   _stepFixed(){
     const t=this.st.t, dt=this.P.dt;
@@ -333,7 +380,7 @@ class AngularMomentumEngine {
     const balance=e.T-this.T0-this.st.W_act-this.st.W_control-this.st.W_parameter; if(Math.abs(balance)>1e-6*Math.max(1,Math.abs(e.T)))this.warnings.push({type:'energy-balance',value:balance});
     const torqueWarning=Math.abs(e.tau_h)>this.P.tau_h_warn;
     const R=qR(this.st.q);
-    return {t:this.st.t,q:[...this.st.q],theta:th,theta_target:this.target,thetaDot:thd,thetaDdot:thdd,Omega_b:[...e.Om_b],Omega_w:expressInWorldFrame(this.st.q,e.omega_w),n_w:[...e.n_w],L_wheel:e.L_wheel_b,L_body:e.L_body_b,L_total:e.L_tot_w,L_wheel_body:e.L_wheel_b,L_body_body:e.L_body_b,L_total_body:e.L_tot_b,L_wheel_world:expressInWorldFrame(this.st.q,e.L_wheel_b),L_body_world:expressInWorldFrame(this.st.q,e.L_body_b),L_total_world:e.L_tot_w,T:e.T,W_act:this.st.W_act,W_control:this.st.W_control,W_parameter:this.st.W_parameter,L_control:[...this.st.L_control],external_control:this.st.lastControl ? {...this.st.lastControl, ...(this.st.lastControl.deltaL ? {deltaL:[...this.st.lastControl.deltaL]} : {})} : null,params:{D:this.P.D,R:this.P.R,Ia:this.P.Ia,m_w:this.P.m_w,s0:this.P.s0,mu:this.P.mu},tau_h:e.tau_h,tau_react:e.tau_react_b,tau_bearing:this.mode==='VerticalBearing'?e.tau_ext_w:[0,0,0],tau_h_warning:torqueWarning,warnings:[...this.warnings]};
+    return {t:this.st.t,q:[...this.st.q],theta:th,theta_target:this.target,thetaDot:thd,thetaDdot:thdd,Omega_b:[...e.Om_b],Omega_w:expressInWorldFrame(this.st.q,e.omega_w),n_w:[...e.n_w],L_wheel:e.L_wheel_b,L_body:e.L_body_b,L_total:e.L_tot_w,L_wheel_body:e.L_wheel_b,L_body_body:e.L_body_b,L_total_body:e.L_tot_b,L_wheel_world:expressInWorldFrame(this.st.q,e.L_wheel_b),L_body_world:expressInWorldFrame(this.st.q,e.L_body_b),L_total_world:e.L_tot_w,T:e.T,W_act:this.st.W_act,W_control:this.st.W_control,W_parameter:this.st.W_parameter,L_control:[...this.st.L_control],external_control:this.st.lastControl ? {...this.st.lastControl, ...(this.st.lastControl.deltaL ? {deltaL:[...this.st.lastControl.deltaL]} : {})} : null,params:{D:this.P.D,R:this.P.R,Ia:this.P.Ia,m_w:this.P.m_w,s0:this.P.s0,mu:this.P.mu,includeHuman:this.includeHuman},tau_h:e.tau_h,tau_react:e.tau_react_b,tau_bearing:this.mode==='VerticalBearing'?e.tau_ext_w:[0,0,0],tau_h_warning:torqueWarning,warnings:[...this.warnings]};
   }
 }
 

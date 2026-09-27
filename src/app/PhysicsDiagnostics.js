@@ -1,8 +1,7 @@
 /**
  * Student-facing physical diagnostics.
  * All displayed quantities come directly from one engine snapshot. The
- * component convention remains the validated 3N.1 convention: angular
- * momenta shown here are expressed in the body frame.
+ * The panel uses the world frame, matching the physical vector overlay.
  */
 class PhysicsDiagnostics {
   constructor({ document, mount, mode = 'VerticalBearing' } = {}) {
@@ -80,8 +79,11 @@ class PhysicsDiagnostics {
     // separately and is exposed as physicalOmegaWheel; it is not a second UI
     // source for the displayed control value.
     const omegaWheel = state.params.s0;
-    const LWheel = state.L_wheel_body ?? state.L_wheel;
-    const LBody = state.L_body_body ?? state.L_body;
+    // The overlay draws world-frame vectors, so the student-facing component
+    // values use the same frame. This keeps panel X/Y/Z numerically identical
+    // to the colored physical arrows.
+    const LWheel = state.L_wheel_world ?? state.L_wheel_body ?? state.L_wheel;
+    const LBody = state.L_body_world ?? state.L_body_body ?? state.L_body;
     if (!Array.isArray(LWheel) || LWheel.length !== 3 || !LWheel.every(Number.isFinite) ||
         !Array.isArray(LBody) || LBody.length !== 3 || !LBody.every(Number.isFinite)) {
       throw new TypeError('physics snapshot must contain wheel and body angular momentum vectors');
@@ -103,8 +105,8 @@ class PhysicsDiagnostics {
   }
 
   getState(state, omega = state.params.s0, physicalOmega = this._dot(state.Omega_w, state.n_w)) {
-    const wheel = state.L_wheel_body ?? state.L_wheel;
-    const body = state.L_body_body ?? state.L_body;
+    const wheel = state.L_wheel_world ?? state.L_wheel_body ?? state.L_wheel;
+    const body = state.L_body_world ?? state.L_body_body ?? state.L_body;
     const LWheel = Array.isArray(wheel) ? [...wheel] : undefined;
     const LBody = Array.isArray(body) ? [...body] : undefined;
     return {
@@ -119,12 +121,12 @@ class PhysicsDiagnostics {
       LBody,
       LWheelMagnitude: LWheel ? this._norm(LWheel) : undefined,
       LBodyMagnitude: LBody ? this._norm(LBody) : undefined,
-      frame: 'body'
+      frame: 'world'
     };
   }
 
   _addHumanYHelp(row, value) {
-    const helpText = 'Aunque el humano gira alrededor de Z, su momento angular no tiene por qué apuntar exactamente en la misma dirección. En este modelo, L = I·Ω y la distribución y posición de las masas producen un acoplamiento entre Y y Z (Iᵧ𝓏 ≠ 0). Por eso un giro Ωz puede generar una componente Ly, sin significar que el humano esté girando alrededor de Y. Al invertir el sentido del giro, esta componente cambia de signo. Es un resultado físico del modelo, no un valor agregado artificialmente.';
+    const helpText = 'Las componentes X, Y y Z de este panel usan el marco mundial, igual que las flechas de colores del overlay. El acoplamiento antropomórfico se origina en el marco corporal (Iᵧ𝓏 ≠ 0) y, al transformar el vector al mundo, sus componentes pueden redistribuirse entre X, Y y Z. No significa que exista un giro independiente alrededor de cada eje.';
     row.setAttribute?.('aria-label', `Componente Y del momento angular humano: ${value.toFixed(4)}. Ayuda disponible en el signo de interrogación.`);
     row.style.position = 'relative';
 

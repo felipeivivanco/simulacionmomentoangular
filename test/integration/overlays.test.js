@@ -43,7 +43,7 @@ test('3N-O3 — leyes físicas son un overlay independiente',()=>{
 
 test('3N.1-O4 — vectores usan lenguaje de física y no nombres internos',()=>{
   const v=new PhysicsVectorsOverlay({three:THREE,document:null});
-  assert.deepEqual([...v.arrows.keys()],['wheelOmega','wheelL','bodyOmega','bodyL']);
+  assert.deepEqual([...v.arrows.keys()],['wheelOmega','wheelL','bodyOmega','bodyL','wheelLX','wheelLY','wheelLZ','bodyLX','bodyLY','bodyLZ']);
   assert.equal(v.arrows.has('L_total'),false);
   assert.equal(v.arrows.has('wheelOmega'),true); assert.equal(v.arrows.has('wheelL'),true);
   assert.equal(v.arrows.has('bodyOmega'),true); assert.equal(v.arrows.has('bodyL'),true);

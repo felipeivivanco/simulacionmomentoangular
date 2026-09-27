@@ -51,7 +51,8 @@ test('3M-2 — cambiar D actualiza R y geometría visual, conservando el centro'
   const after = engine.setWheelDiameter(1.40);
   assert.equal(after.params.D, 1.40);
   assert.equal(after.params.R, 0.70);
-  assert.deepEqual(after.L_total, before.L_total);
+  assert.notDeepEqual(after.L_total, before.L_total);
+  assert.ok(Math.abs(after.L_wheel[0]) > Math.abs(before.L_wheel[0]));
   const wheel = new WheelVisual({three: THREE, radius: before.params.R});
   const centerBefore = {x:0,y:0,z:0};
   wheel.setPosition(centerBefore);
@@ -96,7 +97,9 @@ test('3M-4b — masa de rueda recalcula Ia según el modelo de aro delgado', () 
   assert.equal(after.params.Ia, after.params.m_w * after.params.R ** 2);
   assert.notEqual(after.params.mu, before.params.mu);
   assert.ok(Number.isFinite(after.Omega_w[0]));
-  assert.equal(after.L_total[0], before.L_total[0]);
+  assert.notEqual(after.L_total[0], before.L_total[0]);
+  assert.equal(after.params.s0, before.params.s0);
+  assert.equal(after.params.Ia * after.params.s0, after.L_wheel[0]);
   assert.match(after.external_control.parameter, /m_w/);
 });
 

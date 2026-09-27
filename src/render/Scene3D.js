@@ -80,7 +80,7 @@ class Scene3D {
 
     if (typeof THREE.ArrowHelper === 'function' && typeof THREE.Vector3 === 'function') {
       this.axesOverlay = new AxesOverlay({ three: THREE, document: options.document ?? globalThis.document });
-      this.vectorsOverlay = new PhysicsVectorsOverlay({ three: THREE, document: options.document ?? globalThis.document });
+      this.vectorsOverlay = new PhysicsVectorsOverlay({ three: THREE, document: options.document ?? globalThis.document, contrast: spaceBackground });
       this.scene.add(this.axesOverlay.object, this.vectorsOverlay.object);
     }
 
