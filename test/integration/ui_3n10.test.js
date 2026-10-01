@@ -220,7 +220,9 @@ test('3N.10-E — 0, ±45 y ±90 mantienen mano izquierda → eje → mano derec
 test('3N.10-F — la ruta de ángulo inicial no introduce estado paralelo ni animación artificial', async () => {
   const source = await (await import('node:fs/promises')).readFile(new URL('../../src/app/main.js', import.meta.url), 'utf8');
   assert.match(source, /onThetaTargetChange:/);
-  assert.match(source, /engine\.reset\(\{ theta0: initialTheta \}\)/);
-  assert.match(source, /loop\.syncCurrentState\(\)/);
+  assert.match(source, /if \(status === 'stopped'\)/);
+  assert.match(source, /engine\.reset\(\{ theta0: physicsState\.theta_target \}\)/);
+  assert.match(source, /if \(status === 'running'\) this\.loop\.refreshCurrentState\(\)/);
+  assert.doesNotMatch(source, /status === 'running' && fresh/);
   assert.doesNotMatch(source, /setTimeout|setInterval/);
 });

@@ -334,3 +334,5 @@ test('T — initial demo body remains static while wheel spin advances visually'
   assert.deepEqual(wheel.orientation, initial.visual.wheelQuaternion);
   assert.deepEqual(person.orientation, initial.visual.personQuaternion);
 });
+
+

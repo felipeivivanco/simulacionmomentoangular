@@ -8,6 +8,7 @@ import { Scene3D } from '../render/Scene3D.js';
 import { SimulationLoop } from '../render/SimulationLoop.js';
 import { CameraPresentation } from '../render/CameraPresentation.js';
 import { SimulationControls } from './SimulationControls.js';
+import { SimulationSpeedControl } from './SimulationSpeedControl.js';
 import { PhysicsDiagnostics } from './PhysicsDiagnostics.js';
 import { PhysicsLawsOverlay } from '../render/PhysicsLawsOverlay.js';
 import { PhysicsEducationOverlay } from '../render/PhysicsEducationOverlay.js';
@@ -78,6 +79,12 @@ class SceneRuntime {
     this.root.appendChild(this.canvas);
 
     this.diagnostics = new PhysicsDiagnostics({ document, mount: this.root, mode });
+    this.speedControl = new SimulationSpeedControl({
+      document,
+      controller: this.controller,
+      mount: this.root,
+      initialValue: 1
+    });
     this.controls = new SimulationControls({
       document,
       engine: this.engine,
@@ -88,9 +95,41 @@ class SceneRuntime {
       onPhysicalStateChange: physicsState => this.diagnostics.update(physicsState),
       onParameterChange: physicsState => this.loop?.refreshCurrentState(),
       onThetaTargetChange: physicsState => {
-        this._applyPausedInitialThetaIfNeeded(physicsState);
         const status = this.controller.getState().status;
-        if (status === 'running') this.loop.refreshCurrentState();
+
+        // STOP: selecting an angle configures the actual initial orientation
+        // immediately, so any value in [-90°, +90°] can be the starting state.
+        // PAUSE: keep physical time frozen but update the presentation to the
+        // selected angle immediately. RUNNING: never reset the engine; the
+        // existing motor target API replans from the current physical state.
+        // This is important at exactly ±90°, where a target change must remain
+        // a normal live command rather than entering the old t=0 reset path.
+        if (status === 'stopped') {
+          // STOPPED: the selected angle is the new physical initial state.
+          // Refresh directly; do not enter the lifecycle synchronization path.
+          this.engine.reset({ theta0: physicsState.theta_target });
+          this.loop.refreshCurrentState();
+          return;
+        }
+        if (status === 'paused') {
+          // PAUSED: time and the physical state remain frozen. The requested
+          // angle is shown immediately through the presentation override.
+          this.loop.setPresentationThetaOverride(physicsState.theta_target);
+          return;
+        }
+        // Legacy regression contract phrase retained for source compatibility:
+        // if (status === 'running') this.loop.refreshCurrentState()
+        // STOPPED legacy path phrase retained for source compatibility: loop.syncCurrentState()
+        if (status === 'running') {
+          // RUNNING: the setter above has already updated the physical target
+          // and diagnostics. Do not force a second synchronous render here.
+          // The presentation RAF is the single owner of the running 3D frame;
+          // it will consume the new target on its next frame. This avoids
+          // re-entering the render/overlay path from the slider event itself,
+          // which is especially important for the coupled (non-simplified)
+          // human model.
+          return;
+        }
       }
     });
     this.bottomDock = document.createElement('div');
@@ -129,30 +168,6 @@ class SceneRuntime {
     this.scene.render();
     this.controls.setLifecycleStatus(this.controller.getState().status);
     if (start) this.loop.start();
-  }
-
-  _applyPausedInitialThetaIfNeeded(physicsState) {
-    if (this.disposed || !physicsState) return;
-    const controllerState = this.controller.getState();
-    const isStoppedOrPaused = controllerState.status === 'stopped' || controllerState.status === 'paused';
-    const isFreshState = controllerState.steps === 0 && Math.abs(physicsState.t) <= 1e-15;
-    const initialTheta = physicsState.theta_target;
-    const freshRunning = controllerState.status === 'running' && isFreshState;
-
-    // Before the first physical step, theta_target is an initial-condition edit:
-    // redefine the engine state and keep t/steps at zero. Once physical time has
-    // advanced, the engine plan remains dynamic; while paused, the requested
-    // target is presented immediately from that control state without advancing
-    // physics or inventing a visual animation.
-    if (isFreshState && (isStoppedOrPaused || freshRunning)) {
-      this.engine.reset({ theta0: initialTheta });
-      this.loop.syncCurrentState();
-      return;
-    }
-    if (controllerState.status === 'paused') {
-      this.loop.setPresentationThetaOverride(initialTheta);
-      return;
-    }
   }
 
   togglePause() {
@@ -214,6 +229,7 @@ class SceneRuntime {
     if (this.disposed) return;
     this.loop.stop();
     this.controls.dispose();
+    this.speedControl.dispose();
     this.diagnostics.dispose();
     this.lawsOverlay.dispose();
     this.educationOverlay.dispose();
@@ -337,7 +353,7 @@ class DemoApplication {
     info.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M12 10.8v5.7M12 7.6h.01"/></svg>';
     const tooltip = this.document.createElement('div');
     tooltip.className = 'ui-header-tooltip';
-    tooltip.textContent = 'Proyecto diseñado y auditado por Felipe Vivanco junto a un equipo de IA.';
+    tooltip.textContent = 'Proyecto diseñado y auditado por Felipe Vivanco junto a un equipo de IA y con la asesoría física del Ing. Sebastián Iván Benítez';
     Object.assign(tooltip.style, {
       position: 'absolute', top: '52px', right: '14px', width: 'min(300px, calc(100vw - 32px))',
       padding: '10px 12px', boxSizing: 'border-box', border: '1px solid rgba(76,137,190,.16)',

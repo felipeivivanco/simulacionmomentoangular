@@ -129,10 +129,12 @@ test('3N.20-V-sign — ω y L principales usan solo signo, mientras la descompos
   assert.equal(overlay.labels.has('wheelOmega'),false);
   // With document:null labels are intentionally absent; verify the label contract directly.
   assert.equal(overlay._signedScalarLabel('ω',[-4,0,0]), 'ω−');
-  assert.equal(overlay._signedScalarLabel('𝑳',[-2,0,3]), '𝑳+');
+  assert.equal(overlay._signedVectorLabel('𝑳',[-2,0,3]), '𝑳(-x,+z)');
   assert.ok(overlay.arrows.get('wheelOmega').direction.z < 0);
   assert.ok(overlay.arrows.get('wheelLX').direction.z < 0);
   assert.ok(overlay.arrows.get('wheelLZ').direction.y > 0);
+  assert.equal(overlay._signedVectorLabel('𝑳',[4,0,0]), '𝑳(+x)');
+  assert.equal(overlay._signedVectorLabel('𝑳',[0,-2,3]), '𝑳(-y,+z)');
 });
 
 test('3N.20-V-labels — no hay etiquetas de componentes y las de L/ω quedan cerca de la punta', async () => {
@@ -174,13 +176,13 @@ test('3N.20-UI — switch Considerar cuerpo humano queda debajo de Momento de in
   const mount = new FakeElementUI('main');
   const engine = makeEngine('VerticalBearing');
   const controls = new SimulationControls({document, engine, mount});
-  assert.equal(controls.humanModelLabel.textContent, 'Considerar cuerpo humano');
+  assert.equal(controls.humanModelLabel.textContent, 'Modelo simplificado del humano');
   assert.equal(controls.humanModelSwitch.type, 'checkbox');
   assert.equal(controls.humanModelSwitch.role, 'switch');
-  assert.equal(controls.humanModelSwitch.checked, true);
-  assert.equal(controls.humanModelState.textContent, 'ON');
+  assert.equal(controls.humanModelSwitch.checked, false);
+  assert.equal(controls.humanModelState.textContent, 'OFF');
   assert.ok(controls.scrollContent.children.indexOf(controls.humanModelGroup) > controls.scrollContent.children.indexOf(controls.readout));
-  controls.humanModelSwitch.checked = false;
+  controls.humanModelSwitch.checked = true;
   controls.humanModelSwitch.emit('change');
   assert.equal(engine.getState().params.includeHuman, false);
   assert.equal(controls.getState().includeHuman, false);

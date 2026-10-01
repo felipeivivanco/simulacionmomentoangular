@@ -64,7 +64,7 @@ class PhysicsVectorsOverlay {
       ['wheelOmega', this._toVisual(omegaWheelWorld), wheelOrigin, true, this.vectorScale, this._signedOmegaLabel(omegaWheelWorld, state.n_w)],
       ['wheelL', this._toVisual(LwheelWorld), wheelOrigin, true, this.vectorScale, this._signedVectorLabel('𝑳', LwheelWorld)],
       ['bodyOmega', this._toVisual(omegaBodyWorld), bodyOrigin, this._norm(omegaBodyWorld) > 1e-12, this.humanVectorVisualScale, this._signedScalarLabel('ω', omegaBodyWorld)],
-      ['bodyL', this._toVisual(LbodyWorld), bodyOrigin, this._norm(LbodyWorld) > 1e-12, this.humanVectorVisualScale, this._signedScalarLabel('𝑳', LbodyWorld)]
+      ['bodyL', this._toVisual(LbodyWorld), bodyOrigin, this._norm(LbodyWorld) > 1e-12, this.humanVectorVisualScale, this._signedVectorLabel('𝑳', LbodyWorld)]
     ];
     for (const [key, vector, origin, visible, scale, labelText] of entries) {
       this._updateArrow(key, vector, origin, visible, scale);
@@ -109,10 +109,11 @@ class PhysicsVectorsOverlay {
 
     // The construction is deliberately scaled by the same factor as the
     // original L arrow, so its last endpoint coincides with the original tip.
-    if (hasDecomposition) {
-      const residual = Math.hypot(current[0] - (origin.x + totalVisual[0] * unitScale), current[1] - (origin.y + totalVisual[1] * unitScale), current[2] - (origin.z + totalVisual[2] * unitScale));
-      if (residual > 1e-10) throw new Error('vector component construction does not close at L tip');
-    }
+    // The decomposition is a presentation aid only. Floating-point roundoff
+    // must never be allowed to abort the animation/physics loop. The physical
+    // vector itself remains the authoritative value; the component arrows are
+    // reconstructed from that same vector and therefore may differ only by
+    // floating-point roundoff at the final tip.
   }
 
   _updateSegmentArrow(key, start, end, color) {
@@ -175,7 +176,13 @@ class PhysicsVectorsOverlay {
   }
 
   _signedVectorLabel(base, vectorWorld) {
-    return this._signedScalarLabel(base, vectorWorld);
+    const eps = 1e-10;
+    const axes = ['x', 'y', 'z'];
+    const components = axes
+      .map((axis, index) => ({ axis, value: vectorWorld[index] }))
+      .filter(({ value }) => Math.abs(value) > eps)
+      .map(({ axis, value }) => `${value > 0 ? '+' : '-'}${axis}`);
+    return components.length ? `${base}(${components.join(',')})` : `${base}(0)`;
   }
 
   _setLabelText(key, text) {

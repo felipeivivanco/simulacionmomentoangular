@@ -124,10 +124,10 @@ class SimulationLoop {
     return structuredClone(this._visualState);
   }
 
-  refreshCurrentState() {
+  refreshCurrentState({ notifyPhysics = true } = {}) {
     const controllerState = this.controller.getState();
     const physicsState = controllerState.physics;
-    if (this.onPhysicsState) this.onPhysicsState(physicsState);
+    if (notifyPhysics && this.onPhysicsState) this.onPhysicsState(physicsState);
     const thetaOverride = controllerState.status === 'paused' && this._presentationThetaOverride !== null
       ? { thetaOverride: this._presentationThetaOverride }
       : undefined;
@@ -160,27 +160,38 @@ class SimulationLoop {
     this._frameHandle = null;
     if (!this.presentationActive || !this.running) return;
     if (!Number.isFinite(timestamp)) {
-      throw new TypeError('requestAnimationFrame timestamp must be finite');
+      this._schedule();
+      return;
     }
 
-    // First frame establishes the clock and renders the current state. It has
-    // a zero simulation delta by policy, regardless of timestamp magnitude.
+    // Physics advancement owns the simulation clock. Keep it outside the
+    // presentation error boundary: a rendering problem must never roll back
+    // or stop the physical simulation.
     let realDelta = 0;
     if (this._lastTimestamp !== null) {
       realDelta = Math.max(0, (timestamp - this._lastTimestamp) / 1000);
     }
     this._lastTimestamp = timestamp;
-
     this.controller.advance(realDelta);
-    const physicsState = this.controller.getState().physics;
-    if (this.onPhysicsState) this.onPhysicsState(physicsState);
-    const thetaOverride = this.controller.getState().status === 'paused' ? this._presentationThetaOverride : null;
-    this._visualState = this.visualAdapter.update(physicsState, thetaOverride === null ? undefined : { thetaOverride });
-    if (typeof this.scene.updatePhysicsOverlays === 'function') this.scene.updatePhysicsOverlays(physicsState, this._visualState);
-    this._applyVisualState();
-    this.renderer.render(this._visualState);
-    this.scene.render();
-    if (this.controller.getState().status === 'running') this._schedule();
+    const controllerState = this.controller.getState();
+    const physicsState = controllerState.physics;
+
+    try {
+      if (this.onPhysicsState) this.onPhysicsState(physicsState);
+      const thetaOverride = controllerState.status === 'paused' ? this._presentationThetaOverride : null;
+      this._visualState = this.visualAdapter.update(physicsState, thetaOverride === null ? undefined : { thetaOverride });
+      if (typeof this.scene.updatePhysicsOverlays === 'function') this.scene.updatePhysicsOverlays(physicsState, this._visualState);
+      this._applyVisualState();
+      this.renderer.render(this._visualState);
+      this.scene.render();
+    } catch (error) {
+      // A presentation-only exception must not terminate requestAnimationFrame.
+      // The next frame retries the current physical state. Do not mutate or
+      // reset physics here.
+      this.lastPresentationError = error;
+    } finally {
+      if (this.controller.getState().status === 'running') this._schedule();
+    }
   }
 
   _applyVisualState() {

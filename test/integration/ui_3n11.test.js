@@ -150,7 +150,7 @@ test('3N.11-F — author wheel icon is top-right and exposes the requested toolt
   const source = await fs.readFile(new URL('../../src/app/main.js', import.meta.url), 'utf8');
   assert.match(source, /right: '14px'/);
   assert.match(source, /wheel-favicon\.svg/);
-  assert.match(source, /Proyecto diseñado y auditado por Felipe Vivanco junto a un equipo de IA\./);
+  assert.match(source, /Proyecto diseñado y auditado por Felipe Vivanco junto a un equipo de IA y con la asesoría física del Ing\. Sebastián Iván Benítez/);
   assert.match(source, /mouseenter/);
   assert.match(source, /focus/);
 });

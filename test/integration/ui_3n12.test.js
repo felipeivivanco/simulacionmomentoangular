@@ -224,7 +224,7 @@ test('3N.12-I — X/Y/Z labels render from a 4x internal canvas while keeping th
 
 test('3N.12-J — STOP angle route contains no frame timer or artificial animation', async () => {
   const source = await fs.readFile(new URL('../../src/app/main.js', import.meta.url), 'utf8');
-  assert.match(source, /engine\.reset\(\{ theta0: initialTheta \}\)/);
+  assert.match(source, /engine\.reset\(\{ theta0: physicsState\.theta_target \}\)/);
   assert.match(source, /loop\.syncCurrentState\(\)/);
   assert.match(source, /status === 'stopped'/);
   assert.match(source, /status === 'paused'/);

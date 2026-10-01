@@ -392,3 +392,37 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(47,134,234,.
   font-weight:800 !important;
   line-height:1.35;
 }
+
+/* Playback speed: compact floating control immediately to the right of Controles. */
+.ui-speed-control {
+  left:calc(clamp(292px, 23vw, 365px) + 20px) !important;
+  top:10px !important;
+  width:clamp(205px, 16vw, 245px) !important;
+  padding:12px 13px 13px !important;
+  z-index:13 !important;
+}
+.ui-speed-control .ui-control-label { display:block; margin-bottom:8px; }
+.ui-speed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; }
+.ui-speed-row .ui-range { min-width:0; }
+.ui-speed-value { min-width:38px; text-align:right; }
+.ui-speed-value input { width:58px; height:28px; padding:3px 6px; border:1px solid var(--ui-border); border-radius:8px; font-size:12px; font-weight:800; text-align:right; }
+
+#app[data-ui-theme="dark"] .ui-speed-value input { background:#202d3a !important; color:#edf4fb !important; border-color:rgba(178,202,224,.24) !important; }
+
+@media (max-width:900px) {
+  .scene-runtime .ui-speed-control {
+    position:relative !important;
+    left:auto !important;
+    top:auto !important;
+    width:100% !important;
+    max-width:none !important;
+    grid-row:2;
+  }
+  .scene-runtime .ui-controls { grid-row:3; }
+  .scene-runtime .ui-diagnostics { grid-row:4; }
+  .scene-runtime { grid-template-rows:minmax(300px,48vh) auto auto auto; }
+}
+
+@media (max-width:560px) {
+  .scene-runtime { grid-template-rows:minmax(260px,43vh) auto auto auto; }
+}

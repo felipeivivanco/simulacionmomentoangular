@@ -33,7 +33,7 @@ test('3N.19-A — el ? de Ly usa exactamente la nueva explicación física', () 
   diagnostics.update(EngineAdapter.create({mode:'VerticalBearing'}).getState());
   assert.equal(diagnostics._humanYTooltips.length, 1);
   const tooltip = diagnostics._humanYTooltips[0];
-  const expected = 'Aunque el humano gira alrededor de Z, su momento angular no tiene por qué apuntar exactamente en la misma dirección. En este modelo, L = I·Ω y la distribución y posición de las masas producen un acoplamiento entre Y y Z (Iᵧ𝓏 ≠ 0). Por eso un giro Ωz puede generar una componente Ly, sin significar que el humano esté girando alrededor de Y. Al invertir el sentido del giro, esta componente cambia de signo. Es un resultado físico del modelo, no un valor agregado artificialmente.';
+  const expected = 'Las componentes X, Y y Z de este panel usan el marco mundial, igual que las flechas de colores del overlay. El acoplamiento antropomórfico se origina en el marco corporal (Iᵧ𝓏 ≠ 0) y, al transformar el vector al mundo, sus componentes pueden redistribuirse entre X, Y y Z. No significa que exista un giro independiente alrededor de cada eje.';
   assert.equal(tooltip.textContent, expected);
   assert.doesNotMatch(tooltip.textContent, /L = I·ω/);
   assert.doesNotMatch(tooltip.textContent, /acumulando momento angular/);

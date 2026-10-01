@@ -40,16 +40,53 @@ function harness({mode='VerticalBearing', theta0=0, s0=40}={}) {
   const mount=new FakeElement('main');
   const controls=new SimulationControls({document,engine,mount,onTogglePause:()=>loop.toggleLifecycle(),onParameterChange:()=>loop.refreshCurrentState(),onThetaTargetChange:state=>{
     const c=controller.getState();
-    const fresh=c.steps===0&&Math.abs(state.t)<=1e-15;
-    if(fresh){engine.reset({theta0:state.theta_target});loop.syncCurrentState();}
+    if(c.status==='stopped'){engine.reset({theta0:state.theta_target});loop.refreshCurrentState();}
     else if(c.status==='paused')loop.setPresentationThetaOverride(state.theta_target);
-    else if(c.status==='running')loop.refreshCurrentState();
+    else if(c.status==='running'){
+      const freshRunning=c.steps===0&&Math.abs(c.physics.t)<=1e-15;
+      if(freshRunning) engine.reset({theta0:state.theta_target});
+      loop.refreshCurrentState();
+    }
   }});
   const diagnostics=new PhysicsDiagnostics({document,mount});
   controls.update(engine.getState());
   loop.reset();
   return {engine,controller,loop,raf,controls,diagnostics,scene,renderer};
 }
+
+
+test('3N.15-THETA-90 — +90°/-90° stopped → Play → change angle never stalls the running presentation',()=>{
+  for(const mode of ['VerticalBearing','Free']) for(const initialDegrees of [90,-90]) for(const targetDegrees of [0,45,-45,90,-90]){
+    const h=harness({mode,theta0:0,s0:40});
+    h.controls.setTargetDegrees(initialDegrees);
+    assert.equal(h.controller.getState().status,'stopped');
+    assert.ok(Math.abs(h.controller.getState().physics.theta-initialDegrees*Math.PI/180)<1e-14);
+
+    h.loop.start();
+    h.raf.frame(0);
+    assert.equal(h.controller.getState().status,'running');
+    assert.equal(h.raf.pending.size,1);
+
+    const beforeChange=h.controller.getState();
+    h.controls.setTargetDegrees(targetDegrees);
+    const commanded=h.controller.getState();
+    assert.equal(commanded.status,'running');
+    assert.equal(commanded.physics.theta_target,targetDegrees*Math.PI/180);
+    assert.equal(h.raf.pending.size,1,'el cambio de ángulo no debe cancelar el RAF');
+
+    h.raf.frame(1000/60);
+    const afterOne=h.controller.getState();
+    assert.ok(afterOne.physics.t>=beforeChange.physics.t,'la simulación debe seguir avanzando');
+    assert.equal(afterOne.status,'running');
+    assert.equal(h.raf.pending.size,1,'debe quedar exactamente un RAF pendiente');
+
+    h.raf.frame(2000/60);
+    const afterTwo=h.controller.getState();
+    assert.ok(afterTwo.physics.t>afterOne.physics.t,'el tiempo físico debe continuar actualizándose');
+    assert.equal(afterTwo.status,'running');
+    assert.equal(h.raf.pending.size,1);
+  }
+});
 
 function textOf(el){return el.children.map(x=>x.children?.map(y=>y.textContent).join(' ')??x.textContent).join(' ');}
 function omega(state){return state.Omega_w[0]*state.n_w[0]+state.Omega_w[1]*state.n_w[1]+state.Omega_w[2]*state.n_w[2];}

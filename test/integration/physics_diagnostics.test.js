@@ -43,12 +43,12 @@ test('3N.2-D2 — ω, I y L de la ficha salen directamente del snapshot físico'
   assert.match(text,new RegExp(`x: ${state.L_wheel_world[0].toFixed(4)}`));
 });
 
-test('3N.2-D3 — OFF oculta la velocidad angular y L del humano en parámetros', () => {
+test('3N.2-D3 — el panel mantiene la velocidad angular y L del humano también en modo simplificado', () => {
   const document = new FakeDocument(); const mount = new FakeElement('main');
   const diagnostics = new PhysicsDiagnostics({document,mount});
   const engine = EngineAdapter.create({mode:'VerticalBearing',params:createParams({s0:40}),theta0:0,Omega0:[0,0,0]});
   const state = engine.setIncludeHuman(false); diagnostics.update(state);
   const text = diagnostics.parameters.children.map(x => x.children?.map(child => child.textContent).join(' ') ?? x.textContent).join(' ');
-  assert.doesNotMatch(text,/Velocidad angular del humano/);
-  assert.doesNotMatch(text,/L — humano/);
+  assert.match(text,/Velocidad angular del humano/);
+  assert.match(text,/L — humano/);
 });

@@ -124,7 +124,7 @@ test('3N.9-I — Y de L humano tiene ayuda contextual específica', () => {
   assert.equal(help['aria-label'], 'Explicación de la componente Y de L humano');
   const tooltip = mount.children.find(c => c?.role === 'tooltip');
   assert.ok(tooltip);
-  assert.equal(tooltip.textContent, 'Aunque el humano gira alrededor de Z, su momento angular no tiene por qué apuntar exactamente en la misma dirección. En este modelo, L = I·Ω y la distribución y posición de las masas producen un acoplamiento entre Y y Z (Iᵧ𝓏 ≠ 0). Por eso un giro Ωz puede generar una componente Ly, sin significar que el humano esté girando alrededor de Y. Al invertir el sentido del giro, esta componente cambia de signo. Es un resultado físico del modelo, no un valor agregado artificialmente.');
+  assert.equal(tooltip.textContent, 'Las componentes X, Y y Z de este panel usan el marco mundial, igual que las flechas de colores del overlay. El acoplamiento antropomórfico se origina en el marco corporal (Iᵧ𝓏 ≠ 0) y, al transformar el vector al mundo, sus componentes pueden redistribuirse entre X, Y y Z. No significa que exista un giro independiente alrededor de cada eje.');
   help.emit('mouseenter');
   assert.equal(tooltip.style.display, 'block');
   help.emit('mouseleave');
